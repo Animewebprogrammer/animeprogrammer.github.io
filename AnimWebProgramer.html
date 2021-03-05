@@ -1,0 +1,2548 @@
+<!DOCTYPE html>
+<!-- saved from url=(0022)http://localhost:8080/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<script type="text/javascript" id="debugbar_loader" data-time="1614954627" src="./AnimWebProgramer_files/index.php"></script><script type="text/javascript" id="debugbar_dynamic_script">
+	/*
+ * Functionality for the CodeIgniter Debug Toolbar.
+ */
+
+var ciDebugBar = {
+
+	toolbarContainer : null,
+	toolbar : null,
+	icon : null,
+
+	//--------------------------------------------------------------------
+
+	init : function () {
+		this.toolbarContainer = document.getElementById('toolbarContainer');
+		this.toolbar = document.getElementById('debug-bar');
+		this.icon    = document.getElementById('debug-icon');
+
+		ciDebugBar.createListeners();
+		ciDebugBar.setToolbarState();
+		ciDebugBar.setToolbarPosition();
+		ciDebugBar.setToolbarTheme();
+		ciDebugBar.toggleViewsHints();
+		ciDebugBar.routerLink();
+
+		document.getElementById('debug-bar-link').addEventListener('click', ciDebugBar.toggleToolbar, true);
+		document.getElementById('debug-icon-link').addEventListener('click', ciDebugBar.toggleToolbar, true);
+
+		// Allows to highlight the row of the current history request
+		var btn = document.querySelector('button[data-time="' + localStorage.getItem('debugbar-time') + '"]');
+		ciDebugBar.addClass(btn.parentNode.parentNode, 'current');
+
+		historyLoad = document.getElementsByClassName('ci-history-load');
+
+		for (var i = 0; i < historyLoad.length; i++)
+		{
+			historyLoad[i].addEventListener('click', function () {
+				loadDoc(this.getAttribute('data-time'));
+			}, true);
+		}
+
+		// Display the active Tab on page load
+		var tab = ciDebugBar.readCookie('debug-bar-tab');
+		if (document.getElementById(tab))
+		{
+			var el           = document.getElementById(tab);
+			el.style.display = 'block';
+			ciDebugBar.addClass(el, 'active');
+			tab = document.querySelector('[data-tab=' + tab + ']');
+			if (tab)
+			{
+				ciDebugBar.addClass(tab.parentNode, 'active');
+			}
+		}
+	},
+
+	//--------------------------------------------------------------------
+
+	createListeners : function () {
+		var buttons = [].slice.call(document.querySelectorAll('#debug-bar .ci-label a'));
+
+		for (var i = 0; i < buttons.length; i++)
+		{
+			buttons[i].addEventListener('click', ciDebugBar.showTab, true);
+		}
+	},
+
+	//--------------------------------------------------------------------
+
+	showTab: function () {
+		// Get the target tab, if any
+		var tab = document.getElementById(this.getAttribute('data-tab'));
+
+		// If the label have not a tab stops here
+		if (! tab)
+		{
+			return;
+		}
+
+		// Remove debug-bar-tab cookie
+		ciDebugBar.createCookie('debug-bar-tab', '', -1);
+
+		// Check our current state.
+		var state = tab.style.display;
+
+		// Hide all tabs
+		var tabs = document.querySelectorAll('#debug-bar .tab');
+
+		for (var i = 0; i < tabs.length; i++)
+		{
+			tabs[i].style.display = 'none';
+		}
+
+		// Mark all labels as inactive
+		var labels = document.querySelectorAll('#debug-bar .ci-label');
+
+		for (var i = 0; i < labels.length; i++)
+		{
+			ciDebugBar.removeClass(labels[i], 'active');
+		}
+
+		// Show/hide the selected tab
+		if (state != 'block')
+		{
+			tab.style.display = 'block';
+			ciDebugBar.addClass(this.parentNode, 'active');
+			// Create debug-bar-tab cookie to persistent state
+			ciDebugBar.createCookie('debug-bar-tab', this.getAttribute('data-tab'), 365);
+		}
+	},
+
+	//--------------------------------------------------------------------
+
+	addClass : function (el, className) {
+		if (el.classList)
+		{
+			el.classList.add(className);
+		}
+		else
+		{
+			el.className += ' ' + className;
+		}
+	},
+
+	//--------------------------------------------------------------------
+
+	removeClass : function (el, className) {
+		if (el.classList)
+		{
+			el.classList.remove(className);
+		}
+		else
+		{
+			el.className = el.className.replace(new RegExp('(^|\\b)' + className.split(' ').join('|') + '(\\b|$)', 'gi'), ' ');
+		}
+	},
+
+	//--------------------------------------------------------------------
+
+	/**
+	 * Toggle display of a data table
+	 *
+	 * @param obj
+	 */
+	toggleDataTable : function (obj) {
+		if (typeof obj == 'string')
+		{
+			obj = document.getElementById(obj + '_table');
+		}
+
+		if (obj)
+		{
+			obj.style.display = obj.style.display == 'none' ? 'block' : 'none';
+		}
+	},
+
+	//--------------------------------------------------------------------
+
+	/**
+	 *   Toggle tool bar from full to icon and icon to full
+	 */
+	toggleToolbar : function () {
+		var open = ciDebugBar.toolbar.style.display != 'none';
+
+		ciDebugBar.icon.style.display    = open == true ? 'inline-block' : 'none';
+		ciDebugBar.toolbar.style.display = open == false ? 'inline-block' : 'none';
+
+		// Remember it for other page loads on this site
+		ciDebugBar.createCookie('debug-bar-state', '', -1);
+		ciDebugBar.createCookie('debug-bar-state', open == true ? 'minimized' : 'open' , 365);
+	},
+
+	//--------------------------------------------------------------------
+
+	/**
+	 * Sets the initial state of the toolbar (open or minimized) when
+	 * the page is first loaded to allow it to remember the state between refreshes.
+	 */
+	setToolbarState: function () {
+		var open = ciDebugBar.readCookie('debug-bar-state');
+
+		ciDebugBar.icon.style.display    = open != 'open' ? 'inline-block' : 'none';
+		ciDebugBar.toolbar.style.display = open == 'open' ? 'inline-block' : 'none';
+	},
+
+	//--------------------------------------------------------------------
+
+	toggleViewsHints: function () {
+		// Avoid toggle hints on history requests that are not the initial
+		if (localStorage.getItem('debugbar-time') != localStorage.getItem('debugbar-time-new'))
+		{
+			var a  = document.querySelector('a[data-tab="ci-views"]');
+			a.href = '#';
+			return;
+		}
+
+		var nodeList       = []; // [ Element, NewElement( 1 )/OldElement( 0 ) ]
+		var sortedComments = [];
+		var comments       = [];
+
+		var getComments = function () {
+			var nodes        = [];
+			var result       = [];
+			var xpathResults = document.evaluate( "//comment()[starts-with(., ' DEBUG-VIEW')]", document, null, XPathResult.ANY_TYPE, null);
+			var nextNode     = xpathResults.iterateNext();
+			while ( nextNode )
+			{
+				nodes.push( nextNode );
+				nextNode = xpathResults.iterateNext();
+			}
+
+			// sort comment by opening and closing tags
+			for (var i = 0; i < nodes.length; ++i)
+			{
+				// get file path + name to use as key
+				var path = nodes[i].nodeValue.substring( 18, nodes[i].nodeValue.length - 1 );
+
+				if ( nodes[i].nodeValue[12] === 'S' ) // simple check for start comment
+				{
+					// create new entry
+					result[path] = [ nodes[i], null ];
+				}
+				else if (result[path])
+				{
+					// add to existing entry
+					result[path][1] = nodes[i];
+				}
+			}
+
+			return result;
+		};
+
+		// find node that has TargetNode as parentNode
+		var getParentNode = function ( node, targetNode ) {
+			if ( node.parentNode === null )
+			{
+				return null;
+			}
+
+			if ( node.parentNode !== targetNode )
+			{
+				return getParentNode( node.parentNode, targetNode );
+			}
+
+			return node;
+		};
+
+		// define invalid & outer ( also invalid ) elements
+		const INVALID_ELEMENTS = [ 'NOSCRIPT', 'SCRIPT', 'STYLE' ];
+		const OUTER_ELEMENTS   = [ 'HTML', 'BODY', 'HEAD' ];
+
+		var getValidElementInner = function ( node, reverse ) {
+			// handle invalid tags
+			if ( OUTER_ELEMENTS.indexOf( node.nodeName ) !== -1 )
+			{
+				for (var i = 0; i < document.body.children.length; ++i)
+				{
+					var index   = reverse ? document.body.children.length - ( i + 1 ) : i;
+					var element = document.body.children[index];
+
+					// skip invalid tags
+					if ( INVALID_ELEMENTS.indexOf( element.nodeName ) !== -1 )
+					{
+						continue;
+					}
+
+					return [ element, reverse ];
+				}
+
+				return null;
+			}
+
+			// get to next valid element
+			while ( node !== null && INVALID_ELEMENTS.indexOf( node.nodeName ) !== -1 )
+			{
+				node = reverse ? node.previousElementSibling : node.nextElementSibling;
+			}
+
+			// return non array if we couldnt find something
+			if ( node === null )
+			{
+				return null;
+			}
+
+			return [ node, reverse ];
+		};
+
+		// get next valid element ( to be safe to add divs )
+		// @return [ element, skip element ] or null if we couldnt find a valid place
+		var getValidElement = function ( nodeElement ) {
+			if (nodeElement)
+			{
+				if ( nodeElement.nextElementSibling !== null )
+				{
+					return getValidElementInner( nodeElement.nextElementSibling, false )
+						|| getValidElementInner( nodeElement.previousElementSibling, true );
+				}
+				if ( nodeElement.previousElementSibling !== null )
+				{
+					return getValidElementInner( nodeElement.previousElementSibling, true );
+				}
+			}
+
+			// something went wrong! -> element is not in DOM
+			return null;
+		};
+
+		function showHints()
+		{
+			// Had AJAX? Reset view blocks
+			sortedComments = getComments();
+
+			for (var key in sortedComments)
+			{
+				var startElement = getValidElement( sortedComments[key][0] );
+				var endElement   = getValidElement( sortedComments[key][1] );
+
+				// skip if we couldnt get a valid element
+				if ( startElement === null || endElement === null )
+				{
+					continue;
+				}
+
+				// find element which has same parent as startelement
+				var jointParent = getParentNode( endElement[0], startElement[0].parentNode );
+				if ( jointParent === null )
+				{
+					// find element which has same parent as endelement
+					jointParent = getParentNode( startElement[0], endElement[0].parentNode );
+					if ( jointParent === null )
+					{
+						// both tries failed
+						continue;
+					}
+					else
+					{
+						startElement[0] = jointParent;
+					}
+				}
+				else
+				{
+					endElement[0] = jointParent;
+				}
+
+				var debugDiv   = document.createElement( 'div' ); // holder
+				var debugPath  = document.createElement( 'div' ); // path
+				var childArray = startElement[0].parentNode.childNodes; // target child array
+				var parent     = startElement[0].parentNode;
+				var start, end;
+
+				// setup container
+				debugDiv.classList.add( 'debug-view' );
+				debugDiv.classList.add( 'show-view' );
+				debugPath.classList.add( 'debug-view-path' );
+				debugPath.innerText = key;
+				debugDiv.appendChild( debugPath );
+
+				// calc distance between them
+				// start
+				for (var i = 0; i < childArray.length; ++i)
+				{
+					// check for comment ( start & end ) -> if its before valid start element
+					if ( childArray[i] === sortedComments[key][1] ||
+						childArray[i] === sortedComments[key][0] ||
+						childArray[i] === startElement[0] )
+					{
+						start = i;
+						if ( childArray[i] === sortedComments[key][0] )
+						{
+							start++; // increase to skip the start comment
+						}
+						break;
+					}
+				}
+				// adjust if we want to skip the start element
+				if ( startElement[1] )
+				{
+					start++;
+				}
+
+				// end
+				for (var i = start; i < childArray.length; ++i)
+				{
+					if ( childArray[i] === endElement[0] )
+					{
+						end = i;
+						// dont break to check for end comment after end valid element
+					}
+					else if ( childArray[i] === sortedComments[key][1] )
+					{
+						// if we found the end comment, we can break
+						end = i;
+						break;
+					}
+				}
+
+				// move elements
+				var number = end - start;
+				if ( endElement[1] )
+				{
+					number++;
+				}
+				for (var i = 0; i < number; ++i)
+				{
+					if ( INVALID_ELEMENTS.indexOf( childArray[start] ) !== -1 )
+					{
+						// skip invalid childs that can cause problems if moved
+						start++;
+						continue;
+					}
+					debugDiv.appendChild( childArray[start] );
+				}
+
+				// add container to DOM
+				nodeList.push( parent.insertBefore( debugDiv, childArray[start] ) );
+			}
+
+			ciDebugBar.createCookie('debug-view', 'show', 365);
+			ciDebugBar.addClass(btn, 'active');
+		}
+
+		function hideHints()
+		{
+			for (var i = 0; i < nodeList.length; ++i)
+			{
+				var index;
+
+				// find index
+				for (var j = 0; j < nodeList[i].parentNode.childNodes.length; ++j)
+				{
+					if ( nodeList[i].parentNode.childNodes[j] === nodeList[i] )
+					{
+						index = j;
+						break;
+					}
+				}
+
+				// move child back
+				while ( nodeList[i].childNodes.length !== 1 )
+				{
+					nodeList[i].parentNode.insertBefore( nodeList[i].childNodes[1], nodeList[i].parentNode.childNodes[index].nextSibling  );
+					index++;
+				}
+
+				nodeList[i].parentNode.removeChild( nodeList[i] );
+			}
+			nodeList.length = 0;
+
+			ciDebugBar.createCookie('debug-view', '', -1);
+			ciDebugBar.removeClass(btn, 'active');
+		}
+
+		var btn = document.querySelector('[data-tab=ci-views]');
+
+		// If the Views Collector is inactive stops here
+		if (! btn)
+		{
+			return;
+		}
+
+		btn.parentNode.onclick = function () {
+			if (ciDebugBar.readCookie('debug-view'))
+			{
+				hideHints();
+			}
+			else
+			{
+				showHints();
+			}
+		};
+
+		// Determine Hints state on page load
+		if (ciDebugBar.readCookie('debug-view'))
+		{
+			showHints();
+		}
+	},
+
+	//--------------------------------------------------------------------
+
+	setToolbarPosition: function () {
+		var btnPosition = document.getElementById('toolbar-position');
+
+		if (ciDebugBar.readCookie('debug-bar-position') === 'top')
+		{
+			ciDebugBar.addClass(ciDebugBar.icon, 'fixed-top');
+			ciDebugBar.addClass(ciDebugBar.toolbar, 'fixed-top');
+		}
+
+		btnPosition.addEventListener('click', function () {
+			var position = ciDebugBar.readCookie('debug-bar-position');
+
+			ciDebugBar.createCookie('debug-bar-position', '', -1);
+
+			if (!position || position === 'bottom')
+			{
+				ciDebugBar.createCookie('debug-bar-position', 'top', 365);
+				ciDebugBar.addClass(ciDebugBar.icon, 'fixed-top');
+				ciDebugBar.addClass(ciDebugBar.toolbar, 'fixed-top');
+			}
+			else
+			{
+				ciDebugBar.createCookie('debug-bar-position', 'bottom', 365);
+				ciDebugBar.removeClass(ciDebugBar.icon, 'fixed-top');
+				ciDebugBar.removeClass(ciDebugBar.toolbar, 'fixed-top');
+			}
+		}, true);
+	},
+
+	//--------------------------------------------------------------------
+
+	setToolbarTheme: function () {
+		var btnTheme = document.getElementById('toolbar-theme');
+		var isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+	  var isLightMode = window.matchMedia("(prefers-color-scheme: light)").matches;
+
+		// If a cookie is set with a value, we force the color scheme
+		if (ciDebugBar.readCookie('debug-bar-theme') === 'dark')
+		{
+			ciDebugBar.removeClass(ciDebugBar.toolbarContainer, 'light');
+			ciDebugBar.addClass(ciDebugBar.toolbarContainer, 'dark');
+		}
+		else if (ciDebugBar.readCookie('debug-bar-theme') === 'light')
+		{
+			ciDebugBar.removeClass(ciDebugBar.toolbarContainer, 'dark');
+			ciDebugBar.addClass(ciDebugBar.toolbarContainer, 'light');
+		}
+
+		btnTheme.addEventListener('click', function () {
+			var theme = ciDebugBar.readCookie('debug-bar-theme');
+
+			if (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)
+			{
+				// If there is no cookie, and "prefers-color-scheme" is set to "dark"
+				// It means that the user wants to switch to light mode
+				ciDebugBar.createCookie('debug-bar-theme', 'light', 365);
+				ciDebugBar.removeClass(ciDebugBar.toolbarContainer, 'dark');
+				ciDebugBar.addClass(ciDebugBar.toolbarContainer, 'light');
+			}
+			else
+			{
+				if (theme === 'dark')
+				{
+					ciDebugBar.createCookie('debug-bar-theme', 'light', 365);
+					ciDebugBar.removeClass(ciDebugBar.toolbarContainer, 'dark');
+					ciDebugBar.addClass(ciDebugBar.toolbarContainer, 'light');
+				}
+				else
+				{
+					// In any other cases: if there is no cookie, or the cookie is set to
+					// "light", or the "prefers-color-scheme" is "light"...
+					ciDebugBar.createCookie('debug-bar-theme', 'dark', 365);
+					ciDebugBar.removeClass(ciDebugBar.toolbarContainer, 'light');
+					ciDebugBar.addClass(ciDebugBar.toolbarContainer, 'dark');
+				}
+			}
+		}, true);
+	},
+
+	//--------------------------------------------------------------------
+
+	/**
+	 * Helper to create a cookie.
+	 *
+	 * @param name
+	 * @param value
+	 * @param days
+	 */
+	createCookie : function (name,value,days) {
+		if (days)
+		{
+			var date = new Date();
+
+			date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+
+			var expires = "; expires=" + date.toGMTString();
+		}
+		else
+		{
+			var expires = "";
+		}
+
+		document.cookie = name + "=" + value + expires + "; path=/";
+	},
+
+	//--------------------------------------------------------------------
+
+	readCookie : function (name) {
+		var nameEQ = name + "=";
+		var ca     = document.cookie.split(';');
+
+		for (var i = 0; i < ca.length; i++)
+		{
+			var c = ca[i];
+			while (c.charAt(0) == ' ')
+			{
+				c = c.substring(1,c.length);
+			}
+			if (c.indexOf(nameEQ) == 0)
+			{
+				return c.substring(nameEQ.length,c.length);
+			}
+		}
+		return null;
+	},
+
+	//--------------------------------------------------------------------
+
+	trimSlash: function(text) {
+		return text.replace(/^\/|\/$/g, '');
+	},
+
+	routerLink: function() {
+		var row, _location;
+		var rowGet = document.querySelectorAll('#debug-bar td[data-debugbar-route="GET"]');
+		var patt = /\((?:[^)(]+|\((?:[^)(]+|\([^)(]*\))*\))*\)/;
+
+		for (var i = 0; i < rowGet.length; i++) {
+			row = rowGet[i];
+			if (!/\/\(.+?\)/.test(rowGet[i].innerText)) {
+				row.style = 'cursor: pointer;';
+				row.setAttribute('title', location.origin + '/' + ciDebugBar.trimSlash(row.innerText));
+				row.addEventListener('click', function(ev) {
+					_location = location.origin + '/' + ciDebugBar.trimSlash(ev.target.innerText);
+					var redirectWindow = window.open(_location, '_blank');
+					redirectWindow.location;
+				});
+			}
+			else {
+				row.innerHTML = '<div>' + row.innerText + '</div>'
+					+ '<form data-debugbar-route-tpl="' + ciDebugBar.trimSlash(row.innerText.replace(patt, '?')) + '">'
+					+ row.innerText.replace(patt, '<input type="text" placeholder="$1">')
+					+ '<input type="submit" value="Go" style="margin-left: 4px;">'
+					+ '</form>';
+			}
+		}
+
+		rowGet = document.querySelectorAll('#debug-bar td[data-debugbar-route="GET"] form');
+		for (var i = 0; i < rowGet.length; i++) {
+			row = rowGet[i];
+
+			row.addEventListener('submit', function(event) {
+				event.preventDefault()
+				var inputArray = [], t = 0;
+				var input = event.target.querySelectorAll('input[type=text]'); 
+				var tpl = event.target.getAttribute('data-debugbar-route-tpl');
+				
+				for (var n = 0; n < input.length; n++) {
+					if (input[n].value.length > 0) inputArray.push(input[n].value);
+				}
+
+				if (inputArray.length > 0) {
+					_location = location.origin + '/' + tpl.replace(/\?/g, function() {return inputArray[t++]});
+					var redirectWindow = window.open(_location, '_blank');
+					redirectWindow.location;
+				}
+			})
+		}
+
+	}
+
+};
+</script><style type="text/css" id="debugbar_dynamic_style">
+	/* CodeIgniter 4 - Debug bar ============================================================================ */ /* Forum: https://forum.codeigniter.com * Github: https://github.com/codeigniter4/codeigniter4 * Slack: https://codeigniterchat.slack.com * Website: https://codeigniter.com */ #debug-icon { bottom: 0; position: fixed; right: 0; z-index: 10000; height: 36px; width: 36px; margin: 0px; padding: 0px; clear: both; text-align: center; } #debug-icon a svg { margin: 8px; max-width: 20px; max-height: 20px; } #debug-icon.fixed-top { bottom: auto; top: 0; } #debug-icon .debug-bar-ndisplay { display: none; } #debug-bar { bottom: 0; left: 0; position: fixed; right: 0; z-index: 10000; height: 36px; line-height: 36px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"; font-size: 16px; font-weight: 400; } #debug-bar h1 { bottom: 0; display: inline-block; font-size: 14px; font-weight: normal; margin: 0 16px 0 0; padding: 0; position: absolute; right: 30px; text-align: left; top: 0; } #debug-bar h2 { font-size: 16px; margin: 0; padding: 5px 0 10px 0; } #debug-bar h2 span { font-size: 13px; } #debug-bar h3 { font-size: 12px; font-weight: 200; margin: 0 0 0 10px; padding: 0; text-transform: uppercase; } #debug-bar p { font-size: 12px; margin: 0 0 0 15px; padding: 0; } #debug-bar a { text-decoration: none; } #debug-bar a:hover { text-decoration: underline; } #debug-bar button { border: 1px solid; border-radius: 4px; -moz-border-radius: 4px; -webkit-border-radius: 4px; cursor: pointer; line-height: 15px; } #debug-bar button:hover { text-decoration: underline; } #debug-bar table { border-collapse: collapse; font-size: 14px; line-height: normal; margin: 5px 10px 15px 10px; width: calc(100% - 10px); } #debug-bar table strong { font-weight: 500; } #debug-bar table th { display: table-cell; font-weight: 600; padding-bottom: 0.7em; text-align: left; } #debug-bar table tr { border: none; } #debug-bar table td { border: none; display: table-cell; margin: 0; text-align: left; } #debug-bar table td:first-child { max-width: 20%; } #debug-bar table td:first-child.narrow { width: 7em; } #debug-bar .toolbar { display: block; overflow: hidden; overflow-y: auto; padding: 0 12px 0 12px; /* give room for OS X scrollbar */ white-space: nowrap; z-index: 10000; } #debug-bar.fixed-top { bottom: auto; top: 0; } #debug-bar.fixed-top .tab { bottom: auto; top: 36px; } #debug-bar #toolbar-position a, #debug-bar #toolbar-theme a { float: left; padding: 0 6px; } #debug-bar #toolbar-position a:hover, #debug-bar #toolbar-theme a:hover { text-decoration: none; } #debug-bar #debug-bar-link { bottom: 0; display: inline-block; font-size: 16px; line-height: 36px; padding: 6px; position: absolute; right: 10px; top: 0; width: 24px; } #debug-bar .ci-label { display: inline-block; font-size: 14px; vertical-align: baseline; } #debug-bar .ci-label:hover { cursor: pointer; } #debug-bar .ci-label a { color: inherit; display: block; letter-spacing: normal; padding: 0 10px; text-decoration: none; } #debug-bar .ci-label img { clear: left; display: inline-block; float: left; margin: 6px 3px 6px 0; width: 16px !important; } #debug-bar .ci-label .badge { border-radius: 12px; -moz-border-radius: 12px; -webkit-border-radius: 12px; display: inline-block; font-size: 75%; font-weight: bold; line-height: 12px; margin-left: 5px; padding: 2px 5px; text-align: center; vertical-align: baseline; white-space: nowrap; } #debug-bar .tab { bottom: 35px; display: none; left: 0; max-height: 62%; overflow: hidden; overflow-y: auto; padding: 1em 2em; position: fixed; right: 0; z-index: 9999; } #debug-bar .timeline { margin-left: 0; width: 100%; } #debug-bar .timeline th { border-left: 1px solid; font-size: 12px; font-weight: 200; padding: 5px 5px 10px 5px; position: relative; text-align: left; } #debug-bar .timeline th:first-child { border-left: 0; } #debug-bar .timeline td { border-left: 1px solid; padding: 5px; position: relative; } #debug-bar .timeline td:first-child { border-left: 0; } #debug-bar .timeline .timer { border-radius: 4px; -moz-border-radius: 4px; -webkit-border-radius: 4px; display: inline-block; padding: 5px; position: absolute; top: 30%; } #debug-bar .route-params, #debug-bar .route-params-item { vertical-align: top; } #debug-bar .route-params td:first-child, #debug-bar .route-params-item td:first-child { font-style: italic; padding-left: 1em; text-align: right; } .debug-view.show-view { border: 1px solid; margin: 4px; } .debug-view-path { font-family: monospace; font-size: 12px; letter-spacing: normal; min-height: 16px; padding: 2px; text-align: left; } .show-view .debug-view-path { display: block !important; } @media screen and (max-width: 1024px) { .hide-sm { display: none !important; } } #debug-icon { background-color: #FFFFFF; box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #debug-icon a:active, #debug-icon a:link, #debug-icon a:visited { color: #DD8615; } #debug-bar { background-color: #FFFFFF; color: #434343; } #debug-bar h1, #debug-bar h2, #debug-bar h3, #debug-bar p, #debug-bar a, #debug-bar button, #debug-bar table, #debug-bar thead, #debug-bar tr, #debug-bar td, #debug-bar button, #debug-bar .toolbar { background-color: transparent; color: #434343; } #debug-bar button { background-color: #FFFFFF; } #debug-bar table strong { color: #FDC894; } #debug-bar table tbody tr:hover { background-color: #DFDFDF; } #debug-bar table tbody tr.current { background-color: #FDC894; } #debug-bar table tbody tr.current:hover td { background-color: #DD4814; color: #FFFFFF; } #debug-bar .toolbar { background-color: #FFFFFF; box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #debug-bar .toolbar img { filter: brightness(0) invert(0.4); } #debug-bar.fixed-top .toolbar { box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #debug-bar.fixed-top .tab { box-shadow: 0 1px 4px #DFDFDF; -moz-box-shadow: 0 1px 4px #DFDFDF; -webkit-box-shadow: 0 1px 4px #DFDFDF; } #debug-bar .muted { color: #434343; } #debug-bar .muted td { color: #DFDFDF; } #debug-bar .muted:hover td { color: #434343; } #debug-bar #toolbar-position, #debug-bar #toolbar-theme { filter: brightness(0) invert(0.6); } #debug-bar .ci-label.active { background-color: #DFDFDF; } #debug-bar .ci-label:hover { background-color: #DFDFDF; } #debug-bar .ci-label .badge { background-color: #5BC0DE; color: #FFFFFF; } #debug-bar .tab { background-color: #FFFFFF; box-shadow: 0 -1px 4px #DFDFDF; -moz-box-shadow: 0 -1px 4px #DFDFDF; -webkit-box-shadow: 0 -1px 4px #DFDFDF; } #debug-bar .timeline th, #debug-bar .timeline td { border-color: #DFDFDF; } #debug-bar .timeline .timer { background-color: #DD8615; } .debug-view.show-view { border-color: #DD8615; } .debug-view-path { background-color: #FDC894; color: #434343; } @media (prefers-color-scheme: dark) { #debug-icon { background-color: #252525; box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #debug-icon a:active, #debug-icon a:link, #debug-icon a:visited { color: #DD8615; } #debug-bar { background-color: #252525; color: #DFDFDF; } #debug-bar h1, #debug-bar h2, #debug-bar h3, #debug-bar p, #debug-bar a, #debug-bar button, #debug-bar table, #debug-bar thead, #debug-bar tr, #debug-bar td, #debug-bar button, #debug-bar .toolbar { background-color: transparent; color: #DFDFDF; } #debug-bar button { background-color: #252525; } #debug-bar table strong { color: #FDC894; } #debug-bar table tbody tr:hover { background-color: #434343; } #debug-bar table tbody tr.current { background-color: #FDC894; } #debug-bar table tbody tr.current td { color: #252525; } #debug-bar table tbody tr.current:hover td { background-color: #DD4814; color: #FFFFFF; } #debug-bar .toolbar { background-color: #434343; box-shadow: 0 0 4px #434343; -moz-box-shadow: 0 0 4px #434343; -webkit-box-shadow: 0 0 4px #434343; } #debug-bar .toolbar img { filter: brightness(0) invert(1); } #debug-bar.fixed-top .toolbar { box-shadow: 0 0 4px #434343; -moz-box-shadow: 0 0 4px #434343; -webkit-box-shadow: 0 0 4px #434343; } #debug-bar.fixed-top .tab { box-shadow: 0 1px 4px #434343; -moz-box-shadow: 0 1px 4px #434343; -webkit-box-shadow: 0 1px 4px #434343; } #debug-bar .muted { color: #DFDFDF; } #debug-bar .muted td { color: #434343; } #debug-bar .muted:hover td { color: #DFDFDF; } #debug-bar #toolbar-position, #debug-bar #toolbar-theme { filter: brightness(0) invert(0.6); } #debug-bar .ci-label.active { background-color: #252525; } #debug-bar .ci-label:hover { background-color: #252525; } #debug-bar .ci-label .badge { background-color: #5BC0DE; color: #DFDFDF; } #debug-bar .tab { background-color: #252525; box-shadow: 0 -1px 4px #434343; -moz-box-shadow: 0 -1px 4px #434343; -webkit-box-shadow: 0 -1px 4px #434343; } #debug-bar .timeline th, #debug-bar .timeline td { border-color: #434343; } #debug-bar .timeline .timer { background-color: #DD8615; } .debug-view.show-view { border-color: #DD8615; } .debug-view-path { background-color: #FDC894; color: #434343; } } #toolbarContainer.dark #debug-icon { background-color: #252525; box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #toolbarContainer.dark #debug-icon a:active, #toolbarContainer.dark #debug-icon a:link, #toolbarContainer.dark #debug-icon a:visited { color: #DD8615; } #toolbarContainer.dark #debug-bar { background-color: #252525; color: #DFDFDF; } #toolbarContainer.dark #debug-bar h1, #toolbarContainer.dark #debug-bar h2, #toolbarContainer.dark #debug-bar h3, #toolbarContainer.dark #debug-bar p, #toolbarContainer.dark #debug-bar a, #toolbarContainer.dark #debug-bar button, #toolbarContainer.dark #debug-bar table, #toolbarContainer.dark #debug-bar thead, #toolbarContainer.dark #debug-bar tr, #toolbarContainer.dark #debug-bar td, #toolbarContainer.dark #debug-bar button, #toolbarContainer.dark #debug-bar .toolbar { background-color: transparent; color: #DFDFDF; } #toolbarContainer.dark #debug-bar button { background-color: #252525; } #toolbarContainer.dark #debug-bar table strong { color: #FDC894; } #toolbarContainer.dark #debug-bar table tbody tr:hover { background-color: #434343; } #toolbarContainer.dark #debug-bar table tbody tr.current { background-color: #FDC894; } #toolbarContainer.dark #debug-bar table tbody tr.current td { color: #252525; } #toolbarContainer.dark #debug-bar table tbody tr.current:hover td { background-color: #DD4814; color: #FFFFFF; } #toolbarContainer.dark #debug-bar .toolbar { background-color: #434343; box-shadow: 0 0 4px #434343; -moz-box-shadow: 0 0 4px #434343; -webkit-box-shadow: 0 0 4px #434343; } #toolbarContainer.dark #debug-bar .toolbar img { filter: brightness(0) invert(1); } #toolbarContainer.dark #debug-bar.fixed-top .toolbar { box-shadow: 0 0 4px #434343; -moz-box-shadow: 0 0 4px #434343; -webkit-box-shadow: 0 0 4px #434343; } #toolbarContainer.dark #debug-bar.fixed-top .tab { box-shadow: 0 1px 4px #434343; -moz-box-shadow: 0 1px 4px #434343; -webkit-box-shadow: 0 1px 4px #434343; } #toolbarContainer.dark #debug-bar .muted { color: #DFDFDF; } #toolbarContainer.dark #debug-bar .muted td { color: #434343; } #toolbarContainer.dark #debug-bar .muted:hover td { color: #DFDFDF; } #toolbarContainer.dark #debug-bar #toolbar-position, #toolbarContainer.dark #debug-bar #toolbar-theme { filter: brightness(0) invert(0.6); } #toolbarContainer.dark #debug-bar .ci-label.active { background-color: #252525; } #toolbarContainer.dark #debug-bar .ci-label:hover { background-color: #252525; } #toolbarContainer.dark #debug-bar .ci-label .badge { background-color: #5BC0DE; color: #DFDFDF; } #toolbarContainer.dark #debug-bar .tab { background-color: #252525; box-shadow: 0 -1px 4px #434343; -moz-box-shadow: 0 -1px 4px #434343; -webkit-box-shadow: 0 -1px 4px #434343; } #toolbarContainer.dark #debug-bar .timeline th, #toolbarContainer.dark #debug-bar .timeline td { border-color: #434343; } #toolbarContainer.dark #debug-bar .timeline .timer { background-color: #DD8615; } #toolbarContainer.dark .debug-view.show-view { border-color: #DD8615; } #toolbarContainer.dark .debug-view-path { background-color: #FDC894; color: #434343; } #toolbarContainer.light #debug-icon { background-color: #FFFFFF; box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #toolbarContainer.light #debug-icon a:active, #toolbarContainer.light #debug-icon a:link, #toolbarContainer.light #debug-icon a:visited { color: #DD8615; } #toolbarContainer.light #debug-bar { background-color: #FFFFFF; color: #434343; } #toolbarContainer.light #debug-bar h1, #toolbarContainer.light #debug-bar h2, #toolbarContainer.light #debug-bar h3, #toolbarContainer.light #debug-bar p, #toolbarContainer.light #debug-bar a, #toolbarContainer.light #debug-bar button, #toolbarContainer.light #debug-bar table, #toolbarContainer.light #debug-bar thead, #toolbarContainer.light #debug-bar tr, #toolbarContainer.light #debug-bar td, #toolbarContainer.light #debug-bar button, #toolbarContainer.light #debug-bar .toolbar { background-color: transparent; color: #434343; } #toolbarContainer.light #debug-bar button { background-color: #FFFFFF; } #toolbarContainer.light #debug-bar table strong { color: #FDC894; } #toolbarContainer.light #debug-bar table tbody tr:hover { background-color: #DFDFDF; } #toolbarContainer.light #debug-bar table tbody tr.current { background-color: #FDC894; } #toolbarContainer.light #debug-bar table tbody tr.current:hover td { background-color: #DD4814; color: #FFFFFF; } #toolbarContainer.light #debug-bar .toolbar { background-color: #FFFFFF; box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #toolbarContainer.light #debug-bar .toolbar img { filter: brightness(0) invert(0.4); } #toolbarContainer.light #debug-bar.fixed-top .toolbar { box-shadow: 0 0 4px #DFDFDF; -moz-box-shadow: 0 0 4px #DFDFDF; -webkit-box-shadow: 0 0 4px #DFDFDF; } #toolbarContainer.light #debug-bar.fixed-top .tab { box-shadow: 0 1px 4px #DFDFDF; -moz-box-shadow: 0 1px 4px #DFDFDF; -webkit-box-shadow: 0 1px 4px #DFDFDF; } #toolbarContainer.light #debug-bar .muted { color: #434343; } #toolbarContainer.light #debug-bar .muted td { color: #DFDFDF; } #toolbarContainer.light #debug-bar .muted:hover td { color: #434343; } #toolbarContainer.light #debug-bar #toolbar-position, #toolbarContainer.light #debug-bar #toolbar-theme { filter: brightness(0) invert(0.6); } #toolbarContainer.light #debug-bar .ci-label.active { background-color: #DFDFDF; } #toolbarContainer.light #debug-bar .ci-label:hover { background-color: #DFDFDF; } #toolbarContainer.light #debug-bar .ci-label .badge { background-color: #5BC0DE; color: #FFFFFF; } #toolbarContainer.light #debug-bar .tab { background-color: #FFFFFF; box-shadow: 0 -1px 4px #DFDFDF; -moz-box-shadow: 0 -1px 4px #DFDFDF; -webkit-box-shadow: 0 -1px 4px #DFDFDF; } #toolbarContainer.light #debug-bar .timeline th, #toolbarContainer.light #debug-bar .timeline td { border-color: #DFDFDF; } #toolbarContainer.light #debug-bar .timeline .timer { background-color: #DD8615; } #toolbarContainer.light .debug-view.show-view { border-color: #DD8615; } #toolbarContainer.light .debug-view-path { background-color: #FDC894; color: #434343; } .debug-bar-width30 { width: 30%; } .debug-bar-width10 { width: 10%; } .debug-bar-width70p { width: 70px; } .debug-bar-width140p { width: 140px; } .debug-bar-width20e { width: 20em; } .debug-bar-width6r { width: 6rem; } .debug-bar-ndisplay { display: none; } .debug-bar-alignRight { text-align: right; } .debug-bar-alignLeft { text-align: left; } .debug-bar-noverflow { overflow: hidden; } #debug-bar td[data-debugbar-route] form { display: none; } #debug-bar td[data-debugbar-route]:hover form { display: block; } #debug-bar td[data-debugbar-route]:hover > div { display: none; } #debug-bar td[data-debugbar-route] input[type=text] { padding: 2px; } #toolbarContainer.dark td[data-debugbar-route] input[type=text] { background: #000; color: #fff; } 
+		.debug-bar-timeline-0 {
+		left: 0.86665153503418%; width: 45.971473058065%;	}
+
+		.debug-bar-timeline-1 {
+		left: 46.844879786174%; width: 1.3601779937744%;	}
+
+		.debug-bar-timeline-2 {
+		left: 51.588217417399%; width: 36.584933598836%;	}
+
+		.debug-bar-timeline-3 {
+		left: 51.59338315328%; width: 29.443105061849%;	}
+
+		.debug-bar-timeline-4 {
+		left: 85.543394088745%; width: 1.6446908315023%;	}
+
+		.debug-bar-timeline-5 {
+		left: 85.543394088745%; width: 2.5749206542969%;	}
+
+	</style>
+
+    <!--Import Google Icon Font-->
+    <link href="./AnimWebProgramer_files/icon" rel="stylesheet">
+    <!--Import materialize.css-->
+    <link type="text/css" rel="stylesheet" href="./AnimWebProgramer_files/materialize.min.css" media="screen,projection">
+    <!-- my css -->
+    <link rel="stylesheet" href="./AnimWebProgramer_files/style.css">
+    <link href="./AnimWebProgramer_files/aos.css" rel="stylesheet">
+    <script src="./AnimWebProgramer_files/aos.js.download"></script>
+    <!--Let browser know website is optimized for mobile-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AnimWebProgramer</title>
+
+<style>
+
+</style><meta name="shimejiBrowserExtensionId" content="gohjpllcolmccldfdggmamodembldgpc" data-version="1.6.5"><style type="text/css">
+@charset "UTF-8";
+/*!
+ * jQuery contextMenu - Plugin for simple contextMenu handling
+ *
+ * Version: v2.5.0
+ *
+ * Authors: Björn Brala (SWIS.nl), Rodney Rehm, Addy Osmani (patches for FF)
+ * Web: http://swisnl.github.io/jQuery-contextMenu/
+ *
+ * Copyright (c) 2011-2017 SWIS BV and contributors
+ *
+ * Licensed under
+ *   MIT License http://www.opensource.org/licenses/mit-license
+ *
+ * Date: 2017-05-25T11:30:28.663Z
+ */
+@-webkit-keyframes cm-spin {
+  0% {
+    -webkit-transform: translateY(-50%) rotate(0deg);
+            transform: translateY(-50%) rotate(0deg);
+  }
+  100% {
+    -webkit-transform: translateY(-50%) rotate(359deg);
+            transform: translateY(-50%) rotate(359deg);
+  }
+}
+@-o-keyframes cm-spin {
+  0% {
+    -webkit-transform: translateY(-50%) rotate(0deg);
+         -o-transform: translateY(-50%) rotate(0deg);
+            transform: translateY(-50%) rotate(0deg);
+  }
+  100% {
+    -webkit-transform: translateY(-50%) rotate(359deg);
+         -o-transform: translateY(-50%) rotate(359deg);
+            transform: translateY(-50%) rotate(359deg);
+  }
+}
+@keyframes cm-spin {
+  0% {
+    -webkit-transform: translateY(-50%) rotate(0deg);
+         -o-transform: translateY(-50%) rotate(0deg);
+            transform: translateY(-50%) rotate(0deg);
+  }
+  100% {
+    -webkit-transform: translateY(-50%) rotate(359deg);
+         -o-transform: translateY(-50%) rotate(359deg);
+            transform: translateY(-50%) rotate(359deg);
+  }
+}
+
+@font-face {
+  font-family: "context-menu-icons";
+  font-style: normal;
+  font-weight: normal;
+
+  src: url("font/context-menu-icons.eot?4yg1f");
+  src: url("font/context-menu-icons.eot?4yg1f#iefix") format("embedded-opentype"), url("font/context-menu-icons.woff2?4yg1f") format("woff2"), url("font/context-menu-icons.woff?4yg1f") format("woff"), url("font/context-menu-icons.ttf?4yg1f") format("truetype");
+}
+
+.context-menu-icon-add:before {
+  content: "EA01";
+}
+
+.context-menu-icon-copy:before {
+  content: "EA02";
+}
+
+.context-menu-icon-cut:before {
+  content: "EA03";
+}
+
+.context-menu-icon-delete:before {
+  content: "EA04";
+}
+
+.context-menu-icon-edit:before {
+  content: "EA05";
+}
+
+.context-menu-icon-loading:before {
+  content: "EA06";
+}
+
+.context-menu-icon-paste:before {
+  content: "EA07";
+}
+
+.context-menu-icon-quit:before {
+  content: "EA08";
+}
+
+.context-menu-icon::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 2em;
+  font-family: "context-menu-icons";
+  font-size: 1em;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  color: #2980b9;
+  text-align: center;
+  -webkit-transform: translateY(-50%);
+      -ms-transform: translateY(-50%);
+       -o-transform: translateY(-50%);
+          transform: translateY(-50%);
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.context-menu-icon.context-menu-hover:before {
+  color: #fff;
+}
+
+.context-menu-icon.context-menu-disabled::before {
+  color: #bbb;
+}
+
+.context-menu-icon.context-menu-icon-loading:before {
+  -webkit-animation: cm-spin 2s infinite;
+       -o-animation: cm-spin 2s infinite;
+          animation: cm-spin 2s infinite;
+}
+
+.context-menu-icon.context-menu-icon--fa {
+  display: list-item;
+  font-family: inherit;
+}
+.context-menu-icon.context-menu-icon--fa::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 2em;
+  font-family: FontAwesome;
+  font-size: 1em;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  color: #2980b9;
+  text-align: center;
+  -webkit-transform: translateY(-50%);
+      -ms-transform: translateY(-50%);
+       -o-transform: translateY(-50%);
+          transform: translateY(-50%);
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.context-menu-icon.context-menu-icon--fa.context-menu-hover:before {
+  color: #fff;
+}
+.context-menu-icon.context-menu-icon--fa.context-menu-disabled::before {
+  color: #bbb;
+}
+
+.context-menu-list {
+  position: absolute;
+  display: inline-block;
+  min-width: 13em;
+  max-width: 26em;
+  padding: .25em 0;
+  margin: .3em;
+  font-family: inherit;
+  font-size: inherit;
+  list-style-type: none;
+  background: #fff;
+  border: 1px solid #bebebe;
+  border-radius: .2em;
+  -webkit-box-shadow: 0 2px 5px rgba(0, 0, 0, .5);
+          box-shadow: 0 2px 5px rgba(0, 0, 0, .5);
+}
+
+.context-menu-item {
+  position: relative;
+  padding: .2em 2em;
+  color: #2f2f2f;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+      -ms-user-select: none;
+          user-select: none;
+  background-color: #fff;
+}
+
+.context-menu-separator {
+  padding: 0;
+  margin: .35em 0;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.context-menu-item > label > input,
+.context-menu-item > label > textarea {
+  -webkit-user-select: text;
+     -moz-user-select: text;
+      -ms-user-select: text;
+          user-select: text;
+}
+
+.context-menu-item.context-menu-hover {
+  color: #fff;
+  cursor: pointer;
+  background-color: #2980b9;
+}
+
+.context-menu-item.context-menu-disabled {
+  color: #bbb;
+  cursor: default;
+  background-color: #fff;
+}
+
+.context-menu-input.context-menu-hover {
+  color: #2f2f2f;
+  cursor: default;
+}
+
+.context-menu-submenu:after {
+  position: absolute;
+  top: 50%;
+  right: .5em;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  content: '';
+  border-color: transparent transparent transparent #2f2f2f;
+  border-style: solid;
+  border-width: .25em 0 .25em .25em;
+  -webkit-transform: translateY(-50%);
+      -ms-transform: translateY(-50%);
+       -o-transform: translateY(-50%);
+          transform: translateY(-50%);
+}
+
+/**
+ * Inputs
+ */
+.context-menu-item.context-menu-input {
+  padding: .3em .6em;
+}
+
+/* vertically align inside labels */
+.context-menu-input > label > * {
+  vertical-align: top;
+}
+
+/* position checkboxes and radios as icons */
+.context-menu-input > label > input[type="checkbox"],
+.context-menu-input > label > input[type="radio"] {
+  position: relative;
+  top: .12em;
+  margin-right: .4em;
+}
+
+.context-menu-input > label {
+  margin: 0;
+}
+
+.context-menu-input > label,
+.context-menu-input > label > input[type="text"],
+.context-menu-input > label > textarea,
+.context-menu-input > label > select {
+  display: block;
+  width: 100%;
+  -webkit-box-sizing: border-box;
+     -moz-box-sizing: border-box;
+          box-sizing: border-box;
+}
+
+.context-menu-input > label > textarea {
+  height: 7em;
+}
+
+.context-menu-item > .context-menu-list {
+  top: .3em;
+  /* re-positioned by js */
+  right: -.3em;
+  display: none;
+}
+
+.context-menu-item.context-menu-visible > .context-menu-list {
+  display: block;
+}
+
+.context-menu-accesskey {
+  text-decoration: underline;
+}
+</style><style type="text/css">
+@import url('https://fonts.googleapis.com/css?family=Lato');
+
+.context-menu-list {
+  font-family: 'Lato', sans-serif !important;
+  font-size: 14px;
+  text-align: left;
+  font-weight: normal;
+  width: 200px;
+}
+.context-menu-item {
+  font-weight: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  text-align: left;
+}
+.contextmenu-item-custom.contextmenu-item-custom__accent:not(:hover) {
+  background-color: #f8ffeb;
+}
+.contextmenu-item-custom.contextmenu-item-custom__success:not(:hover) {
+  background-color: #eeffcd;
+}
+</style></head>
+
+
+<body id="home" class="scrollspy" data-aos-easing="ease" data-aos-duration="400" data-aos-delay="0">
+
+    
+<!-- Navbar -->
+
+<div class="navbar-fixed">
+    <nav class="white">
+        <div class="container">
+            <div class="nav-wrapper">
+                <a href="http://localhost:8080/Web/index" class="brand-logo"> <img src="./AnimWebProgramer_files/5.png" alt="">  </a>
+                <a href="http://localhost:8080/#" data-target="mobile-nav" class="sidenav-trigger"><i class="material-icons">menu</i></a>
+                <ul id="nav-mobile" class="right hide-on-med-and-down">
+                    <li><a style="color: black; font-size: 17px;" href="http://localhost:8080/Web/index">Home</a></li>
+                    <li><a style="color: black; font-size: 17px;" href="http://localhost:8080/#about">About Me</a></li>
+                    <li><a style="color: black; font-size: 17px;" href="http://localhost:8080/#animfav">AnimFav</a></li>
+                    <li><a style="color: black; font-size: 17px;" href="http://localhost:8080/#animwatch">Anim Watched</a></li>
+                    <li><a style="color: black; font-size: 17px;" href="http://localhost:8080/#bahasa">Language</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+</div>
+
+<div class="progress">
+    <div class="indeterminate"></div>
+</div>
+
+<!-- Slider -->
+<div data-aos="zoom-in" data-aos-duration="800" class="slider center-align aos-init aos-animate" style="height: 500px;">
+    <ul class="slides" style="height: 500px;">
+        <li class="" style="opacity: 0; transform: translateX(0px) translateY(0px);">
+            <img src="data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="background-image: url(&quot;/asset/otaku/img/slider/1.jpg&quot;);">
+            <div class="caption center-align" style="opacity: 0; transform: translateY(-100px);">
+                <h3 style="color: black;">Ohayo Ghozaimasu</h3>
+                <h5 style="color: orange;">Gambatene Minasan</h5>
+            </div>
+        </li>
+        <li class="active" style="opacity: 1; transform: translateX(0px) translateY(0px);">
+            <img src="data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="background-image: url(&quot;/asset/otaku/img/slider/2.jpg&quot;);">
+            <div class="caption center-align" style="opacity: 1; transform: translateX(0px) translateY(0px);">
+                <h3 style="color: orange;">Konichiwa</h3>
+                <h5 style="color: black;">hey, I was the one who made this web</h5>
+            </div>
+        </li>
+        <li class="" style="opacity: 0; transform: translateX(0px) translateY(0px);">
+            <img src="data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" style="background-image: url(&quot;/asset/otaku/img/slider/3.jpg&quot;);">
+            <div class="caption center-align" style="opacity: 0; transform: translateY(-100px);">
+                <h3 style="color: black;">Konbawa</h3>
+                <h5 style="color: orange-darken2;">This is a simple anime web</h5>
+            </div>
+        </li>
+</ul></div>
+
+<!-- Sosmed -->
+<div class="container sosmed ">
+    <div class="card row">
+        <div data-aos="zoom-in" data-aos-delay="100" class="col m4 s4 aos-init aos-animate">
+            <a href="https://www.instagram.com/ivonlep/?hl=id"><img src="./AnimWebProgramer_files/ig.jpg" alt=""></a>
+        </div>
+        <div data-aos="zoom-in" data-aos-delay="200" class="col m4 s4 aos-init aos-animate">
+            <a href="https://www.youtube.com/channel/UCms3VwagAM2nfmyizZqL-rQ"><img src="./AnimWebProgramer_files/yt.jpg" alt=""></a>
+        </div>
+        <div data-aos="zoom-in" data-aos-delay="400" class="col m4 s4 aos-init aos-animate">
+            <a href="https://www.tiktok.com/@_baka.10?lang=id-ID"><img src="./AnimWebProgramer_files/tiktok.png" alt=""></a>
+        </div>
+    </div>
+</div>
+
+
+
+
+<!-- Sidebar -->
+
+<ul class="sidenav" id="mobile-nav">
+    <li><a href="http://localhost:8080/Web/index">Home</a></li>
+    <li><a href="http://localhost:8080/#about">About Me</a></li>
+    <li><a href="http://localhost:8080/#animfav">AnimFav</a></li>
+    <li><a href="http://localhost:8080/#animwatch">Anim Watched</a></li>
+    <li><a href="http://localhost:8080/#bahasa">Language</a></li>
+</ul>
+
+
+<br>
+
+
+
+<!-- About Me -->
+
+
+<section id="about" class="about scrollspy">
+    <div class="container">
+        <div class="row">
+            <div>
+                <h3 data-aos="fade-up" data-aos-anchor-placement="top-center" class="center-align orange-text text-darken-2 aos-init">About Me</h3>
+                <div data-aos="fade-up-right" data-aos-anchor-placement="top-center" data-aos-delay="50" class="col m4 s12 lighten aos-init">
+                    <h5>| Introduce |</h5>
+                    <p>Hello, I am the creator of this web, before I did not intend to make this simple website, but because I like it and want to know how to make a simple website, I created this one with an anime theme because I am an otaku / animlovers. I learned web programmer by myself because at that time I attended a school program called Progate I initially learned about Android using python language but I switched to web programmer and I come from Indonesia</p>
+                </div>
+                <div class="col m4 s12">
+                    <div class="material-placeholder"><div data-aos="fade-up" data-aos-anchor-placement="top-center" class="materialboxed center-align aos-init">
+                        <img class="circle" width="80%" src="./AnimWebProgramer_files/1.jpg">
+                    </div></div>
+                </div>
+                <div data-aos="fade-up-left" data-aos-anchor-placement="top-center" data-aos-delay="50" class="col m4 s12 aos-init">
+                    <h5>| My Hobby |</h5>
+                    <p>Lay down</p>
+                    <div class="progress">
+                        <div class="determinate" style="width: 90%"></div>
+                    </div>
+                    <p>Watching Anime</p>
+                    <div class="progress">
+                        <div class="determinate" style="width: 95%"></div>
+                    </div>
+                    <p>Study</p>
+                    <div class="progress">
+                        <div class="determinate" style="width: 25%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- <img src="img/prof/oreki.jpg" alt="" class="circle responsive-img" style="width: 55%"> -->
+
+
+<br>
+<br>
+
+
+
+
+<!-- Fav Anime -->
+
+
+<div class="parallax-container">
+    <div class="parallax"><img src="./AnimWebProgramer_files/1.png" alt="" class="responsive-img " style="opacity: 1; transform: translate3d(-50%, 0.0532596px, 0px);"></div>
+    <section id="animfav" class="animfav scrollspy">
+        <div class="container fav ">
+            <h3 data-aos="zoom-in" data-aos-anchor-placement="top-center" class="orange-text text-darken-2 aos-init"> My Favorite Anime</h3>
+            <br>
+            <div class="row">
+                <div data-aos="fade-up" data-aos-anchor-placement="top-center" data-aos-delay="50" class="col m4 s12 center-align aos-init">
+                    <img src="./AnimWebProgramer_files/1(1).jpg" class="responsive-img ">
+                    <h5><strong>~ Kimi no Suizo o Tabetai ~</strong></h5>
+                    <p class="black-text text-darken-2">One day, she happens to find a diary at the hospital. The diary belongs to his classmate named Sakura, a cheerful, cheerful and popular girl from his school.The only problem the girl has is that she has terminal pancreas disease and has time to live a few more months.After the quiet boy discovered this fact, Sakura explained that she was the only person other than her family who knew about her condition. Because Sakura wanted to maintain an orderly school life as long as she could. The boy promised to keep it a secret. And Sakura decided to spend her last few months with that loner.</p>
+                </div>
+
+                <div data-aos="fade-up" data-aos-anchor-placement="top-center" data-aos-delay="50" class="col m4 s12 center-align aos-init">
+                    <img src="./AnimWebProgramer_files/2.jpg">
+                    <h5><strong>~ Shigatsu wa Kimi no Uso ~</strong> </h5>
+                    <p class="black-text text-darken-2">Tells about a talented pianist named Kousei Arima. The very talented Kousei has won various competitions very often. At the age of 11, Kousei decided not to play the piano anymore. He felt that he no longer had a purpose.</p>
+                </div>
+
+                <div data-aos="fade-up" data-aos-anchor-placement="top-center" data-aos-delay="50" class="col m4 s12 center-align aos-init">
+                    <img style="width: 40%;" src="./AnimWebProgramer_files/3.jpg" class="responsive-img ">
+                    <h5>~ Hyouka ~</h5>
+                    <p class="black-text text-darken-2">Tells about a meeting between a girl who is full of curiosity about something named Chitanda Eru and a man who prefers silence and saves energy, arguably lazy named Oreki Houtaru, their meeting makes many new things in Oreki Houtaru's life.</p>
+                </div>
+            </div>
+            <br>
+            <div data-aos="zoom-in" data-aos-anchor-placement="top-center" data-aos-delay="50" class="anim3 center-align aos-init">
+                <a href="http://localhost:8080/Web/detail" class="btn red darken-3">MORE</a>
+            </div>
+        </div>
+</section></div>
+
+
+
+
+
+<br>
+<br>
+<br>
+<br>
+<br>
+
+
+<!-- Anime tonton -->
+<div class="parallax-container">
+    <div class="parallax"><img src="./AnimWebProgramer_files/1.png" alt="" class="responsive-img " style="opacity: 1; transform: translate3d(-50%, 3.4671px, 0px);"></div>
+    <section id="animwatch" class=" scrollspy">
+        <div id="animwatch" class="container nim ">
+            <div class="row">
+                <h3 data-aos="zoom-in" data-aos-anchor-placement="top-center" class="center orange-text text darken-2 aos-init"> Some of the Anime I Watched</h3>
+                <div class="col m3 s12 center ">
+                    <div data-aos="fade-up" data-aos-anchor-placement="top-center" data-aos-delay="" class="aos-init">
+                        <img src="./AnimWebProgramer_files/tonikaku.jpg" class="responsive-img ">
+                        <h5>Tonikaku Kawai</h5>
+                    </div>
+                </div>
+                <div data-aos="fade-up" data-aos-anchor-placement="top-center" data-aos-delay="" class="col m3 s12 center aos-init">
+                    <div class="">
+                        <img src="./AnimWebProgramer_files/darling.jpg" class="responsive-img ">
+                        <h5>Darling in the Franxx</h5>
+                    </div>
+                </div>
+                <div data-aos="fade-up" data-aos-anchor-placement="top-center" data-aos-delay="" class="col m3 s12 center aos-init">
+                    <div class="">
+                        <img src="./AnimWebProgramer_files/kaichou.jpg" class="responsive-img ">
+                        <h5>Kaichou Maid-Sama</h5>
+                    </div>
+                </div>
+                <div data-aos="fade-up" data-aos-anchor-placement="top-center" data-aos-delay="" class="col m3 s12 center aos-init">
+                    <div class="">
+                        <img src="./AnimWebProgramer_files/gotoubun.jpg" class="responsive-img ">
+                        <h5>GotoubounHanayome</h5>
+
+                    </div>
+                </div>
+                <div data-aos="zoom-in" data-aos-anchor-placement="top-center" data-aos-delay="" class="anim2 center-align aos-init">
+                    <a href="http://localhost:8080/Web/anim2" class="btn  red darken-3">more</a>
+                </div>
+            </div>
+        </div>
+</section></div>
+
+
+
+<br>
+<br>
+
+
+
+
+<!-- Bahasa -->
+
+<div id="bahasa" class="container bahasa scrollspy">
+    <div data-aos="zoom-in" data-aos-anchor-placement="center-bottom" class="row aos-init">
+        <h3 class="center-align orange-text text-darken-2 ">Language / Gengo / Bahasa</h3>
+        <br>
+        <br>
+        <div data-aos-delay="50" class="col m3 s6">
+            <img src="./AnimWebProgramer_files/php.png" alt="">
+        </div>
+        <div data-aos-delay="50" class="col m3 s6">
+            <img src="./AnimWebProgramer_files/html.png" alt="">
+        </div>
+        <div data-aos-delay="50" class="col m3 s6">
+            <img src="./AnimWebProgramer_files/css.png" alt="">
+        </div>
+        <div data-aos-delay="50" class="col m3 s6">
+            <img src="./AnimWebProgramer_files/js.png" alt="">
+        </div>
+
+    </div>
+</div>
+
+
+
+<!-- Code Editor -->
+
+
+
+<!-- footer -->
+
+<footer class="flow-text orange darken-2 center-align">
+    <p style="color: antiquewhite;">AnimWebProgrammer . Web Design#1 . 2021/2022</p>
+    <i class="far fa-copyright"></i>
+</footer>
+
+    <script type="text/javascript" src="./AnimWebProgramer_files/materialize.min.js.download"></script>
+    <script>
+        AOS.init();
+
+        const sidenav = document.querySelectorAll('.sidenav');
+        M.Sidenav.init(sidenav);
+
+        const slider = document.querySelectorAll('.slider');
+        M.Slider.init(slider, {
+            indicators: false,
+            height: 500,
+            transition: 600,
+            interval: 4000,
+        });
+
+        const materialboxed = document.querySelectorAll('.materialboxed');
+        M.Materialbox.init(materialboxed);
+
+        const parallax = document.querySelectorAll('.parallax');
+        M.Parallax.init(parallax);
+
+        const scroll = document.querySelectorAll('.scrollspy');
+        M.ScrollSpy.init(scroll);
+
+        const autocomplete = document.querySelectorAll('.autocomplete');
+        M.Autocomplete.init(autocomplete);
+    </script><div class="sidenav-overlay"></div><div class="drag-target"></div>
+
+
+
+
+<!-- DEBUG-VIEW ENDED 1 APPPATH/Config/../Views/layout/template1.php -->
+
+<!-- DEBUG-VIEW ENDED 2 1 APPPATH/Config/../Views/layout/template1.php -->
+<div id="shimai-world" style="position: fixed; top: 0px; left: 0px; width: 100%; height: 100%; z-index: 2147483647; pointer-events: none; background: transparent;"></div><div id="toolbarContainer">
+<div id="debug-icon" class="debug-bar-ndisplay" style="display: inline-block;">
+	<a id="debug-icon-link" href="javascript:void(0)">
+		<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="155.000000px" height="200.000000px" viewBox="0 0 155.000000 200.000000" preserveAspectRatio="xMidYMid meet">
+			<g transform="translate(0.000000,200.000000) scale(0.100000,-0.100000)" fill="#dd4814" stroke="none">
+				<path d="M737 1963 c22 -79 -7 -185 -78 -290 -18 -26 -107 -122 -197 -213
+				-239 -240 -336 -371 -403 -544 -79 -206 -78 -408 5 -582 64 -134 212 -264 361
+				-314 l60 -20 -30 22 c-210 152 -229 387 -48 588 25 27 48 50 51 50 4 0 7 -27
+				7 -61 0 -57 2 -62 37 -95 30 -27 46 -34 78 -34 56 0 99 24 116 65 29 69 16
+				120 -50 205 -105 134 -117 233 -43 347 l31 48 7 -47 c13 -82 58 -129 250 -258
+				209 -141 306 -261 328 -405 11 -72 -1 -161 -31 -218 -27 -53 -112 -143 -165
+				-174 -24 -14 -43 -26 -43 -28 0 -2 24 4 53 14 241 83 427 271 482 486 19 76
+				19 202 -1 285 -35 152 -146 305 -299 412 l-70 49 -6 -33 c-8 -48 -26 -76 -59
+				-93 -45 -23 -103 -19 -138 10 -67 57 -78 146 -37 305 30 116 32 206 5 291 -27
+				89 -104 206 -162 247 -17 13 -18 12 -11 -15z"></path>
+			</g>
+		</svg>
+	</a>
+</div>
+<div id="debug-bar" style="display: none;">
+	<div class="toolbar">
+		<span id="toolbar-position"><a href="javascript: void(0)">↕</a></span>
+		<span id="toolbar-theme"><a href="javascript: void(0)">🔅</a></span>
+		<span class="ci-label">
+			<a href="javascript: void(0)" data-tab="ci-timeline">
+				<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAD7SURBVEhLY6ArSEtLK09NTbWHcvGC9PR0BaDaQiAdUl9fzwQVxg+AFvwHamqHcnGCpKQkeaDa9yD1UD09UCn8AKaBWJySkmIApFehi0ONwwRQBceBLurAh4FqFoHUAtkrgPgREN+ByYEw1DhMANVEMIhAYQ5U1wtU/wmILwLZRlAp/IBYC8gGw88CaFj3A/FnIL4ETDXGUCnyANSC/UC6HIpnQMXAqQXIvo0khxNDjcMEQEmU9AzDuNI7Lgw1DhOAJIEuhQcRKMcC+e+QNHdDpcgD6BaAANSSQqBcENFlDi6AzQKqgkFlwWhxjVI8o2OgmkFaXI8CTMDAAAAxd1O4FzLMaAAAAABJRU5ErkJggg==">
+				<span class="hide-sm">52.9 ms &nbsp; 3.281 MB</span>
+			</a>
+		</span>
+
+																								<span class="ci-label">
+					<a href="javascript: void(0)" data-tab="ci-views">
+						<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAADeSURBVEhL7ZSxDcIwEEWNYA0YgGmgyAaJLTcUaaBzQQEVjMEabBQxAdw53zTHiThEovGTfnE/9rsoRUxhKLOmaa6Uh7X2+UvguLCzVxN1XW9x4EYHzik033Hp3X0LO+DaQG8MDQcuq6qao4qkHuMgQggLvkPLjqh00ZgFDBacMJYFkuwFlH1mshdkZ5JPJERA9JpI6xNCBESvibQ+IURA9JpI6xNCBESvibQ+IURA9DTsuHTOrVFFxixgB/eUFlU8uKJ0eDBFOu/9EvoeKnlJS2/08Tc8NOwQ8sIfMeYFjqKDjdU2sp4AAAAASUVORK5CYII=">
+						<span class="hide-sm">
+							Views															<span class="badge">2</span>
+													</span>
+					</a>
+				</span>
+												<span class="ci-label">
+					<a href="javascript: void(0)" data-tab="ci-files">
+						<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGBSURBVEhL7ZQ9S8NQGIVTBQUncfMfCO4uLgoKbuKQOWg+OkXERRE1IAXrIHbVDrqIDuLiJgj+gro7S3dnpfq88b1FMTE3VZx64HBzzvvZWxKnj15QCcPwCD5HUfSWR+JtzgmtsUcQBEva5IIm9SwSu+95CAWbUuy67qBa32ByZEDpIaZYZSZMjjQuPcQUq8yEyYEb8FSerYeQVGbAFzJkX1PyQWLhgCz0BxTCekC1Wp0hsa6yokzhed4oje6Iz6rlJEkyIKfUEFtITVtQdAibn5rMyaYsMS+a5wTv8qeXMhcU16QZbKgl3hbs+L4/pnpdc87MElZgq10p5DxGdq8I7xrvUWUKvG3NbSK7ubngYzdJwSsF7TiOh9VOgfcEz1UayNe3JUPM1RWC5GXYgTfc75B4NBmXJnAtTfpABX0iPvEd9ezALwkplCFXcr9styiNOKc1RRZpaPM9tcqBwlWzGY1qPL9wjqRBgF5BH6j8HWh2S7MHlX8PrmbK+k/8PzjOOzx1D3i1pKTTAAAAAElFTkSuQmCC">
+						<span class="hide-sm">
+							Files															<span class="badge">106</span>
+													</span>
+					</a>
+				</span>
+												<span class="ci-label">
+					<a href="javascript: void(0)" data-tab="ci-routes">
+						<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFDSURBVEhL7ZRNSsNQFIUjVXSiOFEcuQIHDpzpxC0IGYeE/BEInbWlCHEDLsSiuANdhKDjgm6ggtSJ+l25ldrmmTwIgtgDh/t37r1J+16cX0dRFMtpmu5pWAkrvYjjOB7AETzStBFW+inxu3KUJMmhludQpoflS1zXban4LYqiO224h6VLTHr8Z+z8EpIHFF9gG78nDVmW7UgTHKjsCyY98QP+pcq+g8Ku2s8G8X3f3/I8b038WZTp+bO38zxfFd+I6YY6sNUvFlSDk9CRhiAI1jX1I9Cfw7GG1UB8LAuwbU0ZwQnbRDeEN5qqBxZMLtE1ti9LtbREnMIuOXnyIf5rGIb7Wq8HmlZgwYBH7ORTcKH5E4mpjeGt9fBZcHE2GCQ3Vt7oTNPNg+FXLHnSsHkw/FR+Gg2bB8Ptzrst/v6C/wrH+QB+duli6MYJdQAAAABJRU5ErkJggg==">
+						<span class="hide-sm">
+							Routes															<span class="badge">3</span>
+													</span>
+					</a>
+				</span>
+												<span class="ci-label">
+					<a href="javascript: void(0)" data-tab="ci-events">
+						<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAEASURBVEhL7ZXNDcIwDIVTsRBH1uDQDdquUA6IM1xgCA6MwJUN2hk6AQzAz0vl0ETUxC5VT3zSU5w81/mRMGZysixbFEVR0jSKNt8geQU9aRpFmp/keX6AbjZ5oB74vsaN5lSzA4tLSjpBFxsjeSuRy4d2mDdQTWU7YLbXTNN05mKyovj5KL6B7q3hoy3KwdZxBlT+Ipz+jPHrBqOIynZgcZonoukb/0ckiTHqNvDXtXEAaygRbaB9FvUTjRUHsIYS0QaSp+Dw6wT4hiTmYHOcYZsdLQ2CbXa4ftuuYR4x9vYZgdb4vsFYUdmABMYeukK9/SUme3KMFQ77+Yfzh8eYF8+orDuDWU5LAAAAAElFTkSuQmCC">
+						<span class="hide-sm">
+							Events															<span class="badge">1</span>
+													</span>
+					</a>
+				</span>
+												<span class="ci-label">
+					<a href="javascript: void(0)" data-tab="ci-history">
+						<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJySURBVEhL3ZU7aJNhGIVTpV6i4qCIgkIHxcXLErS4FBwUFNwiCKGhuTYJGaIgnRoo4qRu6iCiiIuIXXTTIkIpuqoFwaGgonUQlC5KafU5ycmNP0lTdPLA4fu+8573/a4/f6hXpFKpwUwmc9fDfweKbk+n07fgEv33TLSbtt/hvwNFT1PsG/zdTE0Gp+GFfD6/2fbVIxqNrqPIRbjg4t/hY8aztcngfDabHXbKyiiXy2vcrcPH8oDCry2FKDrA+Ar6L01E/ypyXzXaARjDGGcoeNxSDZXE0dHRA5VRE5LJ5CFy5jzJuOX2wHRHRnjbklZ6isQ3tIctBaAd4vlK3jLtkOVWqABBXd47jGHLmjTmSScttQV5J+SjfcUweFQEbsjAas5aqoCLXutJl7vtQsAzpRowYqkBinyCC8Vicb2lOih8zoldd0F8RD7qTFiqAnGrAy8stUAvi/hbqDM+YzkAFrLPdR5ZqoLXsd+Bh5YCIH7JniVdquUWxOPxDfboHhrI5XJ7HHhiqQXox+APe/Qk64+gGYVCYZs8cMpSFQj9JOoFzVqqo7k4HIvFYpscCoAjOmLffUsNUGRaQUwDlmofUa34ecsdgXdcXo4wbakBgiUFafXJV8A4DJ/2UrxUKm3E95H8RbjLcgOJRGILhnmCP+FBy5XvwN2uIPcy1AJvWgqC4xm2aU4Xb3lF4I+Tpyf8hRe5w3J7YLymSeA8Z3nSclv4WLRyFdfOjzrUFX0klJUEtZtntCNc+F69cz/FiDzEPtjzmcUMOr83kDQEX6pAJxJfpL3OX22n01YN7SZCoQnaSdoZ+Jz+PZihH3wt/xlCoT9M6nEtmRSPCQAAAABJRU5ErkJggg==">
+						<span class="hide-sm">
+							History															<span class="badge">20</span>
+													</span>
+					</a>
+				</span>
+					
+		<span class="ci-label">
+			<a href="javascript: void(0)" data-tab="ci-vars">
+				<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACLSURBVEhLYxgFJIHU1NSraWlp/6H4T0pKSjRUijoAyXAwBlrYDpViAFpmARQrJwZDtWACoCROC4D8CnR5XBiqBRMADfyNprgRKkUdAApzoCUdUNwE5MtApYYIALp6NBWBMVQLJgAaOJqK8AOgq+mSio6DggjEBtLUT0UwQ5HZIADkj6aiUTAggIEBANAEDa/lkCRlAAAAAElFTkSuQmCC">
+				<span class="hide-sm">Vars</span>
+			</a>
+		</span>
+
+		<h1>
+			<span class="ci-label">
+				<a href="javascript: void(0)" data-tab="ci-config">
+					<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="18.60px" height="24.0px" viewBox="0 0 18.60 28.000000" preserveAspectRatio="xMidYMid meet">
+						<g transform="translate(0.000000,28.000000) scale(0.010000,-0.010000)" fill="#dd4814" stroke="none">
+							<path d="M737 1963 c22 -79 -7 -185 -78 -290 -18 -26 -107 -122 -197 -213
+							-239 -240 -336 -371 -403 -544 -79 -206 -78 -408 5 -582 64 -134 212 -264 361
+							-314 l60 -20 -30 22 c-210 152 -229 387 -48 588 25 27 48 50 51 50 4 0 7 -27
+							7 -61 0 -57 2 -62 37 -95 30 -27 46 -34 78 -34 56 0 99 24 116 65 29 69 16
+							120 -50 205 -105 134 -117 233 -43 347 l31 48 7 -47 c13 -82 58 -129 250 -258
+							209 -141 306 -261 328 -405 11 -72 -1 -161 -31 -218 -27 -53 -112 -143 -165
+							-174 -24 -14 -43 -26 -43 -28 0 -2 24 4 53 14 241 83 427 271 482 486 19 76
+							19 202 -1 285 -35 152 -146 305 -299 412 l-70 49 -6 -33 c-8 -48 -26 -76 -59
+							-93 -45 -23 -103 -19 -138 10 -67 57 -78 146 -37 305 30 116 32 206 5 291 -27
+							89 -104 206 -162 247 -17 13 -18 12 -11 -15z"></path>
+						</g>
+					</svg>
+					4.0.4				</a>
+			</span>
+		</h1>
+
+		<!-- Open/Close Toggle -->
+		<a id="debug-bar-link" href="javascript:void(0)" title="Open/Close">
+			<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAEPSURBVEhL7ZVLDoJAEEThRuoGDwSEG+jCuFU34s3AK3APP1VDDSGMqI1xx0s6M/2rnlHEaMZElmWrPM+vsDvsYbQ7+us0TReSC2EBrEHxCevRYuppYLXkQpC8sVCuGfTvqSE3hFdFwUGuGfRvqSE35NUAfKZrbQNQm2jrMA+gOK+M+FmhDsRL5voHMA8gFGecq0JOXLWlQg7E7AMIxZnjOiZOEJ82gFCcedUE4gS56QP8yf8ywItz7e+RituKlkkDBoIOH4Nd4HZD4NsGYJ/Abn1xEVOcuZ8f0zc/tHiYmzTAwscBvDIK/veyQ9K/rnewjdF26q0kF1IUxZIFPAVW98x/a+qp8L2M/+HMhETRE6S8TxpZ7KGXAAAAAElFTkSuQmCC">
+		</a>
+	</div>
+
+	<!-- Timeline -->
+	<div id="ci-timeline" class="tab">
+		<table class="timeline">
+			<thead>
+			<tr>
+				<th class="debug-bar-width30">NAME</th>
+				<th class="debug-bar-width10">COMPONENT</th>
+				<th class="debug-bar-width10">DURATION</th>
+									<th>0 ms</th>
+									<th>10 ms</th>
+									<th>20 ms</th>
+									<th>30 ms</th>
+									<th>40 ms</th>
+									<th>50 ms</th>
+							</tr>
+			</thead>
+			<tbody>
+			<tr><td>Bootstrap</td><td>Timer</td><td class="debug-bar-alignRight">27.58 ms</td><td class="debug-bar-noverflow" colspan="6"><span class="timer debug-bar-timeline-0" title="45.97%"></span></td></tr><tr><td>Routing</td><td>Timer</td><td class="debug-bar-alignRight">0.82 ms</td><td class="debug-bar-noverflow" colspan="6"><span class="timer debug-bar-timeline-1" title="1.36%"></span></td></tr><tr><td>Controller</td><td>Timer</td><td class="debug-bar-alignRight">21.95 ms</td><td class="debug-bar-noverflow" colspan="6"><span class="timer debug-bar-timeline-2" title="36.58%"></span></td></tr><tr><td>Controller Constructor</td><td>Timer</td><td class="debug-bar-alignRight">17.67 ms</td><td class="debug-bar-noverflow" colspan="6"><span class="timer debug-bar-timeline-3" title="29.44%"></span></td></tr><tr><td>View: layout/template1.php</td><td>Views</td><td class="debug-bar-alignRight">0.99 ms</td><td class="debug-bar-noverflow" colspan="6"><span class="timer debug-bar-timeline-4" title="1.64%"></span></td></tr><tr><td>View: layout/template1.php</td><td>Views</td><td class="debug-bar-alignRight">1.54 ms</td><td class="debug-bar-noverflow" colspan="6"><span class="timer debug-bar-timeline-5" title="2.57%"></span></td></tr>			</tbody>
+		</table>
+	</div>
+
+	<!-- Collector-provided Tabs -->
+																																<div id="ci-files" class="tab">
+					<h2>Files <span>( 106 )</span></h2>
+
+					<table>
+    <tbody>
+    
+        <tr>
+            <td>App.php</td>
+            <td>APPPATH\Config\App.php</td>
+        </tr>
+    
+        <tr>
+            <td>Autoload.php</td>
+            <td>APPPATH\Config\Autoload.php</td>
+        </tr>
+    
+        <tr>
+            <td>Autoloader.php</td>
+            <td>VENDORPATH\laminas\laminas-zendframework-bridge\src\Autoloader.php</td>
+        </tr>
+    
+        <tr>
+            <td>BaseController.php</td>
+            <td>APPPATH\Controllers\BaseController.php</td>
+        </tr>
+    
+        <tr>
+            <td>Cache.php</td>
+            <td>APPPATH\Config\Cache.php</td>
+        </tr>
+    
+        <tr>
+            <td>ClassLoader.php</td>
+            <td>VENDORPATH\composer\ClassLoader.php</td>
+        </tr>
+    
+        <tr>
+            <td>CliRenderer.php</td>
+            <td>VENDORPATH\kint-php\kint\src\Renderer\CliRenderer.php</td>
+        </tr>
+    
+        <tr>
+            <td>Common.php</td>
+            <td>APPPATH\Common.php</td>
+        </tr>
+    
+        <tr>
+            <td>Constants.php</td>
+            <td>APPPATH\Config\Constants.php</td>
+        </tr>
+    
+        <tr>
+            <td>ContentSecurityPolicy.php</td>
+            <td>APPPATH\Config\ContentSecurityPolicy.php</td>
+        </tr>
+    
+        <tr>
+            <td>Database.php</td>
+            <td>APPPATH\Config\Database.php</td>
+        </tr>
+    
+        <tr>
+            <td>Events.php</td>
+            <td>APPPATH\Config\Events.php</td>
+        </tr>
+    
+        <tr>
+            <td>Exceptions.php</td>
+            <td>APPPATH\Config\Exceptions.php</td>
+        </tr>
+    
+        <tr>
+            <td>Filters.php</td>
+            <td>APPPATH\Config\Filters.php</td>
+        </tr>
+    
+        <tr>
+            <td>Kint.php</td>
+            <td>APPPATH\Config\Kint.php</td>
+        </tr>
+    
+        <tr>
+            <td>Kint.php</td>
+            <td>VENDORPATH\kint-php\kint\src\Kint.php</td>
+        </tr>
+    
+        <tr>
+            <td>Logger.php</td>
+            <td>APPPATH\Config\Logger.php</td>
+        </tr>
+    
+        <tr>
+            <td>Modules.php</td>
+            <td>APPPATH\Config\Modules.php</td>
+        </tr>
+    
+        <tr>
+            <td>Paths.php</td>
+            <td>APPPATH\Config\Paths.php</td>
+        </tr>
+    
+        <tr>
+            <td>Renderer.php</td>
+            <td>VENDORPATH\kint-php\kint\src\Renderer\Renderer.php</td>
+        </tr>
+    
+        <tr>
+            <td>RewriteRules.php</td>
+            <td>VENDORPATH\laminas\laminas-zendframework-bridge\src\RewriteRules.php</td>
+        </tr>
+    
+        <tr>
+            <td>RichRenderer.php</td>
+            <td>VENDORPATH\kint-php\kint\src\Renderer\RichRenderer.php</td>
+        </tr>
+    
+        <tr>
+            <td>Routes.php</td>
+            <td>APPPATH\Config\Routes.php</td>
+        </tr>
+    
+        <tr>
+            <td>Services.php</td>
+            <td>APPPATH\Config\Services.php</td>
+        </tr>
+    
+        <tr>
+            <td>TextRenderer.php</td>
+            <td>VENDORPATH\kint-php\kint\src\Renderer\TextRenderer.php</td>
+        </tr>
+    
+        <tr>
+            <td>Toolbar.php</td>
+            <td>APPPATH\Config\Toolbar.php</td>
+        </tr>
+    
+        <tr>
+            <td>UserAgents.php</td>
+            <td>APPPATH\Config\UserAgents.php</td>
+        </tr>
+    
+        <tr>
+            <td>Utils.php</td>
+            <td>VENDORPATH\kint-php\kint\src\Utils.php</td>
+        </tr>
+    
+        <tr>
+            <td>Validation.php</td>
+            <td>APPPATH\Config\Validation.php</td>
+        </tr>
+    
+        <tr>
+            <td>View.php</td>
+            <td>APPPATH\Config\View.php</td>
+        </tr>
+    
+        <tr>
+            <td>Web.php</td>
+            <td>APPPATH\Controllers\Web.php</td>
+        </tr>
+    
+        <tr>
+            <td>autoload.php</td>
+            <td>VENDORPATH\autoload.php</td>
+        </tr>
+    
+        <tr>
+            <td>autoload.php</td>
+            <td>VENDORPATH\laminas\laminas-zendframework-bridge\src\autoload.php</td>
+        </tr>
+    
+        <tr>
+            <td>autoload_real.php</td>
+            <td>VENDORPATH\composer\autoload_real.php</td>
+        </tr>
+    
+        <tr>
+            <td>autoload_static.php</td>
+            <td>VENDORPATH\composer\autoload_static.php</td>
+        </tr>
+    
+        <tr>
+            <td>awp.php</td>
+            <td>APPPATH\Views\Web\awp.php</td>
+        </tr>
+    
+        <tr>
+            <td>development.php</td>
+            <td>APPPATH\Config\Boot\development.php</td>
+        </tr>
+    
+        <tr>
+            <td>favoritModel.php</td>
+            <td>APPPATH\Models\favoritModel.php</td>
+        </tr>
+    
+        <tr>
+            <td>index.php</td>
+            <td>FCPATH\index.php</td>
+        </tr>
+    
+        <tr>
+            <td>init.php</td>
+            <td>VENDORPATH\kint-php\kint\init.php</td>
+        </tr>
+    
+        <tr>
+            <td>init_helpers.php</td>
+            <td>VENDORPATH\kint-php\kint\init_helpers.php</td>
+        </tr>
+    
+        <tr>
+            <td>platform_check.php</td>
+            <td>VENDORPATH\composer\platform_check.php</td>
+        </tr>
+    
+        <tr>
+            <td>template1.php</td>
+            <td>APPPATH\Views\layout\template1.php</td>
+        </tr>
+    
+        <tr>
+            <td>watchModel.php</td>
+            <td>APPPATH\Models\watchModel.php</td>
+        </tr>
+    
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">AutoloadConfig.php</td>
+            <td>SYSTEMPATH\Config\AutoloadConfig.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Autoloader.php</td>
+            <td>SYSTEMPATH\Autoloader\Autoloader.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">BaseCollector.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\BaseCollector.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">BaseConfig.php</td>
+            <td>SYSTEMPATH\Config\BaseConfig.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">BaseConnection.php</td>
+            <td>SYSTEMPATH\Database\BaseConnection.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">BaseService.php</td>
+            <td>SYSTEMPATH\Config\BaseService.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">CacheFactory.php</td>
+            <td>SYSTEMPATH\Cache\CacheFactory.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">CacheInterface.php</td>
+            <td>SYSTEMPATH\Cache\CacheInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">CodeIgniter.php</td>
+            <td>SYSTEMPATH\CodeIgniter.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Common.php</td>
+            <td>SYSTEMPATH\Common.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Config.php</td>
+            <td>SYSTEMPATH\Config\Config.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Config.php</td>
+            <td>SYSTEMPATH\Database\Config.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Connection.php</td>
+            <td>SYSTEMPATH\Database\MySQLi\Connection.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">ConnectionInterface.php</td>
+            <td>SYSTEMPATH\Database\ConnectionInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">ContentSecurityPolicy.php</td>
+            <td>SYSTEMPATH\HTTP\ContentSecurityPolicy.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Controller.php</td>
+            <td>SYSTEMPATH\Controller.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Database.php</td>
+            <td>SYSTEMPATH\Database\Database.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Database.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\Database.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">DebugToolbar.php</td>
+            <td>SYSTEMPATH\Filters\DebugToolbar.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">DotEnv.php</td>
+            <td>SYSTEMPATH\Config\DotEnv.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Events.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\Events.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Events.php</td>
+            <td>SYSTEMPATH\Events\Events.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Exceptions.php</td>
+            <td>SYSTEMPATH\Debug\Exceptions.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">FileHandler.php</td>
+            <td>SYSTEMPATH\Cache\Handlers\FileHandler.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">FileLocator.php</td>
+            <td>SYSTEMPATH\Autoloader\FileLocator.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Files.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\Files.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">FilterInterface.php</td>
+            <td>SYSTEMPATH\Filters\FilterInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Filters.php</td>
+            <td>SYSTEMPATH\Filters\Filters.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Header.php</td>
+            <td>SYSTEMPATH\HTTP\Header.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">IncomingRequest.php</td>
+            <td>SYSTEMPATH\HTTP\IncomingRequest.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Logger.php</td>
+            <td>SYSTEMPATH\Log\Logger.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">LoggerInterface.php</td>
+            <td>SYSTEMPATH\ThirdParty\PSR\Log\LoggerInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Logs.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\Logs.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Message.php</td>
+            <td>SYSTEMPATH\HTTP\Message.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Model.php</td>
+            <td>SYSTEMPATH\Model.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Modules.php</td>
+            <td>SYSTEMPATH\Modules\Modules.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">RendererInterface.php</td>
+            <td>SYSTEMPATH\View\RendererInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Request.php</td>
+            <td>SYSTEMPATH\HTTP\Request.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">RequestInterface.php</td>
+            <td>SYSTEMPATH\HTTP\RequestInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Response.php</td>
+            <td>SYSTEMPATH\HTTP\Response.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">ResponseInterface.php</td>
+            <td>SYSTEMPATH\HTTP\ResponseInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">ResponseTrait.php</td>
+            <td>SYSTEMPATH\API\ResponseTrait.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">RouteCollection.php</td>
+            <td>SYSTEMPATH\Router\RouteCollection.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">RouteCollectionInterface.php</td>
+            <td>SYSTEMPATH\Router\RouteCollectionInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Router.php</td>
+            <td>SYSTEMPATH\Router\Router.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">RouterInterface.php</td>
+            <td>SYSTEMPATH\Router\RouterInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Routes.php</td>
+            <td>SYSTEMPATH\Config\Routes.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Routes.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\Routes.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Services.php</td>
+            <td>SYSTEMPATH\Config\Services.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Timer.php</td>
+            <td>SYSTEMPATH\Debug\Timer.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Timers.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\Timers.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Toolbar.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">URI.php</td>
+            <td>SYSTEMPATH\HTTP\URI.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">UserAgent.php</td>
+            <td>SYSTEMPATH\HTTP\UserAgent.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Validation.php</td>
+            <td>SYSTEMPATH\Validation\Validation.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">ValidationInterface.php</td>
+            <td>SYSTEMPATH\Validation\ValidationInterface.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">View.php</td>
+            <td>SYSTEMPATH\Config\View.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">View.php</td>
+            <td>SYSTEMPATH\View\View.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">Views.php</td>
+            <td>SYSTEMPATH\Debug\Toolbar\Collectors\Views.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">bootstrap.php</td>
+            <td>SYSTEMPATH\bootstrap.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">rewrite.php</td>
+            <td>SYSTEMPATH\Commands\Server\rewrite.php</td>
+        </tr>
+    
+        <tr class="muted">
+            <td class="debug-bar-width20e">url_helper.php</td>
+            <td>SYSTEMPATH\Helpers\url_helper.php</td>
+        </tr>
+    
+    </tbody>
+</table>
+				</div>
+															<div id="ci-routes" class="tab">
+					<h2>Routes <span></span></h2>
+
+					<h3>Matched Route</h3>
+
+<table>
+    <tbody>
+    
+        <tr>
+            <td>Directory:</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>Controller:</td>
+            <td>\App\Controllers\Web</td>
+        </tr>
+        <tr>
+            <td>Method:</td>
+            <td>index</td>
+        </tr>
+        <tr>
+            <td>Params:</td>
+            <td>0 / 0</td>
+        </tr>
+        
+    
+    </tbody>
+</table>
+
+
+<h3>Defined Routes</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th>Method</th>
+            <th>Route</th>
+            <th>Handler</th>
+        </tr>
+    </thead>
+    <tbody>
+    
+        <tr>
+            <td>GET</td>
+            <td data-debugbar-route="GET" title="http://localhost:8080/" style="cursor: pointer;">/</td>
+            <td>\App\Controllers\Web::index</td>
+        </tr>
+    
+        <tr>
+            <td>CLI</td>
+            <td data-debugbar-route="CLI">migrations/([^/]+)/([^/]+)</td>
+            <td>\CodeIgniter\Commands\MigrationsCommand::$1/$2</td>
+        </tr>
+    
+        <tr>
+            <td>CLI</td>
+            <td data-debugbar-route="CLI">migrations/([^/]+)</td>
+            <td>\CodeIgniter\Commands\MigrationsCommand::$1</td>
+        </tr>
+    
+        <tr>
+            <td>CLI</td>
+            <td data-debugbar-route="CLI">migrations</td>
+            <td>\CodeIgniter\Commands\MigrationsCommand::index</td>
+        </tr>
+    
+        <tr>
+            <td>CLI</td>
+            <td data-debugbar-route="CLI">ci(.*)</td>
+            <td>\CodeIgniter\CLI\CommandRunner::index/$1</td>
+        </tr>
+    
+    </tbody>
+</table>
+				</div>
+															<div id="ci-events" class="tab">
+					<h2>Events <span></span></h2>
+
+					<table>
+    <thead>
+        <tr>
+            <th class="debug-bar-width6r">Time</th>
+            <th>Event Name</th>
+            <th>Times Called</th>
+        </tr>
+    </thead>
+    <tbody>
+    
+        <tr>
+            <td class="narrow">16.29 ms</td>
+            <td>pre_system</td>
+            <td>1</td>
+        </tr>
+    
+    </tbody>
+</table>
+				</div>
+															<div id="ci-history" class="tab">
+					<h2>History <span></span></h2>
+
+					<table>
+    <thead>
+        <tr>
+            <th>Action</th>
+            <th>Datetime</th>
+            <th>Status</th>
+            <th>Method</th>
+            <th>URL</th>
+            <th>Content-Type</th>
+            <th>Is AJAX?</th>
+        </tr>
+    </thead>
+    <tbody>
+    
+        <tr data-active="1" class="current">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614954627">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-05 08:30:27</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857403">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:30:03</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/open</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857385">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:29:45</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857370">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:29:30</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857325">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:28:45</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857265">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:27:45</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857252">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:27:32</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857217">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:26:57</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857199">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:26:39</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857175">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:26:15</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857129">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:25:29</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857086">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:24:46</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857075">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:24:35</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614857007">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:23:27</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614856997">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:23:17</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614856969">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:22:49</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614856902">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:21:42</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614856888">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:21:28</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614856866">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:21:06</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+        <tr data-active="">
+        	<td class="debug-bar-width70p">
+            	<button class="ci-history-load" data-time="1614856819">Load</button>
+            </td>
+            <td class="debug-bar-width140p">2021-03-04 05:20:19</td>
+            <td>200</td>
+            <td>GET</td>
+            <td>http://localhost:8080/Web/anim2</td>
+            <td>text/html; charset=UTF-8</td>
+            <td>No</td>
+        </tr>
+    
+    </tbody>
+</table>
+				</div>
+						
+	<!-- In & Out -->
+	<div id="ci-vars" class="tab">
+
+		<!-- VarData from Collectors -->
+					
+				<a href="javascript:void(0)" onclick="ciDebugBar.toggleDataTable(&#39;view-data&#39;); return false;">
+					<h2>View Data</h2>
+				</a>
+
+				
+					<table id="view-data_table">
+						<tbody>
+												</tbody>
+					</table>
+
+									
+		<!-- Session -->
+		<a href="javascript:void(0)" onclick="ciDebugBar.toggleDataTable(&#39;session&#39;); return false;">
+			<h2>Session User Data</h2>
+		</a>
+
+					<p class="muted">Session doesn't seem to be active.</p>
+		
+		<h2>Request <span>( HTTP/1.1 )</span></h2>
+
+		
+		
+					<a href="javascript:void(0)" onclick="ciDebugBar.toggleDataTable(&#39;request_headers&#39;); return false;">
+				<h3>Headers</h3>
+			</a>
+
+			<table id="request_headers_table">
+				<tbody>
+									<tr>
+						<td>Host</td>
+						<td>localhost:8080</td>
+					</tr>
+									<tr>
+						<td>Connection</td>
+						<td>keep-alive</td>
+					</tr>
+									<tr>
+						<td>Cache-Control</td>
+						<td>max-age=0</td>
+					</tr>
+									<tr>
+						<td>Sec-Ch-Ua</td>
+						<td>"Chromium";v="88", "Google Chrome";v="88", ";Not A Brand";v="99"</td>
+					</tr>
+									<tr>
+						<td>Sec-Ch-Ua-Mobile</td>
+						<td>?0</td>
+					</tr>
+									<tr>
+						<td>Upgrade-Insecure-Requests</td>
+						<td>1</td>
+					</tr>
+									<tr>
+						<td>User-Agent</td>
+						<td>Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36</td>
+					</tr>
+									<tr>
+						<td>Accept</td>
+						<td>text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-Site</td>
+						<td>none</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-Mode</td>
+						<td>navigate</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-User</td>
+						<td>?1</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-Dest</td>
+						<td>document</td>
+					</tr>
+									<tr>
+						<td>Accept-Encoding</td>
+						<td>gzip, deflate, br</td>
+					</tr>
+									<tr>
+						<td>Accept-Language</td>
+						<td>en-US,en;q=0.9</td>
+					</tr>
+								</tbody>
+			</table>
+		
+		
+		<h2>Response
+			<span>( 200 - OK )</span>
+		</h2>
+
+					<a href="javascript:void(0)" onclick="ciDebugBar.toggleDataTable(&#39;response_headers&#39;); return false;">
+				<h3>Headers</h3>
+			</a>
+
+			<table id="response_headers_table">
+				<tbody>
+									<tr>
+						<td>Host</td>
+						<td>localhost:8080</td>
+					</tr>
+									<tr>
+						<td>Connection</td>
+						<td>keep-alive</td>
+					</tr>
+									<tr>
+						<td>Cache-Control</td>
+						<td>max-age=0</td>
+					</tr>
+									<tr>
+						<td>Sec-Ch-Ua</td>
+						<td>"Chromium";v="88", "Google Chrome";v="88", ";Not A Brand";v="99"</td>
+					</tr>
+									<tr>
+						<td>Sec-Ch-Ua-Mobile</td>
+						<td>?0</td>
+					</tr>
+									<tr>
+						<td>Upgrade-Insecure-Requests</td>
+						<td>1</td>
+					</tr>
+									<tr>
+						<td>User-Agent</td>
+						<td>Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36</td>
+					</tr>
+									<tr>
+						<td>Accept</td>
+						<td>text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-Site</td>
+						<td>none</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-Mode</td>
+						<td>navigate</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-User</td>
+						<td>?1</td>
+					</tr>
+									<tr>
+						<td>Sec-Fetch-Dest</td>
+						<td>document</td>
+					</tr>
+									<tr>
+						<td>Accept-Encoding</td>
+						<td>gzip, deflate, br</td>
+					</tr>
+									<tr>
+						<td>Accept-Language</td>
+						<td>en-US,en;q=0.9</td>
+					</tr>
+								</tbody>
+			</table>
+			</div>
+
+	<!-- Config Values -->
+	<div id="ci-config" class="tab">
+		<h2>System Configuration</h2>
+
+		<p class="debug-bar-alignRight">
+	<a href="https://codeigniter4.github.io/CodeIgniter4/index.html" target="_blank">Read the CodeIgniter docs...</a>
+</p>
+
+<table>
+	<tbody>
+		<tr>
+			<td>CodeIgniter Version:</td>
+			<td>4.0.4</td>
+		</tr>
+		<tr>
+			<td>PHP Version:</td>
+			<td>7.4.11</td>
+		</tr>
+		<tr>
+			<td>PHP SAPI:</td>
+			<td>cli-server</td>
+		</tr>
+		<tr>
+			<td>Environment:</td>
+			<td>development</td>
+		</tr>
+		<tr>
+			<td>Base URL:</td>
+			<td>
+									http://localhost:8080/
+							</td>
+		</tr>
+		<tr>
+			<td>TimeZone:</td>
+			<td>America/Chicago</td>
+		</tr>
+		<tr>
+			<td>Locale:</td>
+			<td>en</td>
+		</tr>
+		<tr>
+			<td>Content Security Policy Enabled:</td>
+			<td> No </td>
+		</tr>
+	</tbody>
+</table>
+	</div>
+</div>
+<style type="text/css">
+		.debu</style></div></body></html>

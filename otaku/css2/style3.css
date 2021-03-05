@@ -1,0 +1,90 @@
+.row {
+  background-color: white;
+  color: white;
+  text-align: center;
+}
+
+.navbar-fixed {
+  background-color: black;
+  height: 150px;
+  padding-top: 2px;
+}
+.navbar-fixed img {
+  margin-top: -2px;
+  border-radius: none;
+  height: 150px;
+}
+.progress {
+  margin-top: -1px;
+}
+
+.judul h4 {
+  text-align: center;
+  color: black;
+  font-family: fantasy;
+  font-size: 40px;
+  border-bottom: black solid;
+  margin-top: 30px;
+}
+
+.striped {
+  color: black !important;
+  background-color: white;
+}
+
+.striped thead {
+  text-align: center !important;
+}
+
+.tabel1 img {
+  text-align: center;
+  background-color: rgb(255, 255, 255);
+  height: 200px;
+  width: 200px;
+}
+
+.tabel1 th {
+  text-align: center;
+  font-size: 20px;
+}
+.tabel1 td {
+  text-align: center;
+  font-size: 20px;
+  font-family: monospa ce bold;
+}
+.card {
+  background-color: white;
+}
+footer {
+  padding: 10px;
+}
+
+/* DEKSTOP VERSION */
+@media (min-width: 992px) {
+  .tabel1 img {
+    text-align: center;
+    background-color: rgb(255, 255, 255);
+    height: 300px;
+    width: 300px;
+  }
+
+  .tabel1 {
+    font-family: serif;
+  }
+  .tabel1 th {
+    text-align: center;
+    border: orange solid;
+    font-size: 30px;
+  }
+  .tabel1 td {
+    text-align: center;
+    font-size: 30px;
+    border: orange solid;
+  }
+  .card {
+    background-color: white;
+  }
+  .card content p {
+    color: red !important;
+  }
+}

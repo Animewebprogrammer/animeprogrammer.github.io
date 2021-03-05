@@ -1,0 +1,159 @@
+.slider h3,
+.slider h5,
+.fav h3,
+.nim h3,
+.bahasa h3 {
+  text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.sosmed img {
+  height: 40% !important;
+  width: 40% !important;
+}
+
+.sosmed {
+  margin-top: -30px;
+}
+
+.nav-wrapper img {
+  margin-top: -10px;
+  height: 150px;
+}
+.progress {
+  position: relative;
+  z-index: 1;
+  margin-top: -0.5px !important;
+}
+.slider {
+  margin-top: -50px !important;
+}
+
+.slider h3,
+.slider h5 {
+  margin-top: 20px !important;
+}
+
+.parallax-container {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  height: 10%;
+}
+
+.about img {
+  box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.fav img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  max-height: 300px;
+  max-width: 300px;
+  box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.fav p {
+  color: black;
+  text-align: left;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.nim h3 {
+  margin-top: 50px !important;
+}
+
+.nim img {
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 60px;
+  height: 200px;
+  width: 250px;
+}
+
+.container img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.anim img {
+  height: 200px;
+  width: 200px;
+  margin-top: -5px;
+  margin-left: 5px;
+  box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.anim2 {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+}
+
+.anim3 {
+  position: relative;
+  z-index: 1;
+  margin-right: -20px;
+}
+
+.bahasa img {
+  height: 120%;
+  width: 120%;
+}
+
+footer {
+  padding: 20px;
+}
+
+/* DEKSTOP VERSION */
+@media (min-width: 992px) {
+  .nav-wrapper img {
+    position: relative;
+    z-index: 1;
+    margin-top: -10px;
+    height: 150px;
+  }
+  .progress {
+    position: relative;
+    margin-top: -0.5px !important;
+  }
+
+  .slider {
+    position: relative;
+    z-index: -1;
+    margin-top: 50px;
+  }
+  .sosmed {
+    margin-top: -60px;
+  }
+
+  .sosmed img {
+    height: 25% !important;
+    width: 25% !important;
+  }
+
+  .parallax-container {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    height: 10%;
+  }
+  .anim2 {
+    position: relative;
+    z-index: 1;
+    margin-top: -20px !important;
+  }
+
+  .anim3 {
+    position: relative;
+    z-index: 1;
+    margin-bottom: 40px !important;
+    margin-left: -65px;
+  }
+  .bahasa img {
+    height: 60%;
+    width: 60%;
+  }
+}
